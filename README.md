@@ -83,7 +83,38 @@ Claude ตอบกลับ:
 /legal-intake → MCP: case_intake → Lead ใน Odoo
 ```
 
-## Quick Start
+## Install as Claude Code Plugin
+
+### Step 1: Add marketplace
+
+```bash
+/plugin marketplace add monthop-gmail/poc-legal-service
+```
+
+### Step 2: Install plugin
+
+```bash
+/plugin install legal-th@monthop-gmail-poc-legal-service
+```
+
+### Step 3: Start Docker services
+
+```bash
+git clone https://github.com/monthop-gmail/poc-legal-service.git
+cd poc-legal-service
+docker compose up -d
+```
+
+เสร็จ! ใช้ `/legal-consult` หรือถามคำถามกฎหมายไทยได้เลย
+
+> **Dev mode**: ทดสอบ plugin จาก local directory
+> ```bash
+> claude --plugin-dir ./poc-legal-service
+> ```
+
+---
+
+## Quick Start (Docker Only)
 
 ### Prerequisites
 
@@ -256,13 +287,18 @@ Fee schedules: แรงงาน / สัญญา / อาญา (consultation
 
 ```
 legal-service/
-├── .claude/skills/              # Skill commands (6 slash commands)
+├── .claude-plugin/
+│   ├── plugin.json              # Plugin manifest
+│   └── marketplace.json         # Marketplace listing
+├── .mcp.json                    # MCP server config (auto-discovered)
+├── skills/                      # Skill commands (6 slash commands)
 │   ├── legal-consult/SKILL.md
 │   ├── legal-calculate/SKILL.md
 │   ├── legal-compare/SKILL.md
 │   ├── legal-intake/SKILL.md
 │   ├── legal-draft/SKILL.md
 │   └── legal-status/SKILL.md
+├── .claude/skills/              # Local dev copy (same skills)
 ├── src/
 │   ├── index.ts                 # MCP server (stdio transport)
 │   ├── http-server.ts           # MCP server (Streamable HTTP + SSE)

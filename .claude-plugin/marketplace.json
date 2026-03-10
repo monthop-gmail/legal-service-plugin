@@ -1,0 +1,14 @@
+{
+  "name": "legal-th-marketplace",
+  "plugins": [
+    {
+      "name": "legal-th",
+      "description": "ปรึกษากฎหมายไทยเบื้องต้น — ค้นหามาตรา คำนวณค่าชดเชย ค้นหาคำพิพากษา ประเมินค่าบริการ นัดหมายทนาย",
+      "version": "0.1.0",
+      "source": {
+        "type": "github",
+        "repo": "monthop-gmail/poc-legal-service"
+      }
+    }
+  ]
+}
