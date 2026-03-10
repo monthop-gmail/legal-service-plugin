@@ -3,7 +3,7 @@
   "id": "legal-th",
   "name": "Legal Thailand - ทนายความ AI",
   "version": "0.1.0",
-  "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ และนัดหมายทนายความ",
+  "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ ค้นหาคำพิพากษาด้วย RAG และนัดหมายทนายความ",
   "author": {
     "name": "Legal-TH Team",
     "url": "https://legal-th.example.com"
@@ -13,10 +13,10 @@
   "icon": "⚖️",
   "pricing": {
     "model": "freemium",
-    "free_tools": ["legal_search", "fee_estimate"],
-    "paid_tools": ["case_intake"],
+    "free_tools": ["legal_search", "fee_estimate", "rag_search", "rag_status"],
+    "paid_tools": ["case_intake", "rag_ingest"],
     "plans": [
-      { "name": "free", "price": 0, "tools": ["legal_search", "fee_estimate"] },
+      { "name": "free", "price": 0, "tools": ["legal_search", "fee_estimate", "rag_search", "rag_status"] },
       { "name": "pro", "price": 299, "currency": "THB", "period": "month", "tools": ["*"] }
     ]
   },
@@ -25,6 +25,7 @@
     "tools": [
       {
         "name": "legal_search",
+        "category": "static",
         "description": "ค้นหากฎหมายไทย + คำนวณค่าชดเชย",
         "example_prompts": [
           "ถูกเลิกจ้างไม่เป็นธรรม ทำงานมา 5 ปี",
@@ -34,6 +35,7 @@
       },
       {
         "name": "fee_estimate",
+        "category": "static",
         "description": "ประเมินค่าบริการทนายความ",
         "example_prompts": [
           "ค่าปรึกษาทนายคดีแรงงานเท่าไหร่",
@@ -42,19 +44,69 @@
       },
       {
         "name": "case_intake",
-        "description": "นัดหมาย / ส่งเรื่องให้ทนาย",
+        "category": "odoo",
+        "description": "นัดหมาย / ส่งเรื่องให้ทนาย → Odoo CRM",
         "example_prompts": [
           "อยากนัดพบทนาย",
           "ส่งเรื่องให้ทนายช่วย"
         ]
+      },
+      {
+        "name": "list_leads",
+        "category": "odoo",
+        "description": "ดูรายการ Lead ทั้งหมด (admin)"
+      },
+      {
+        "name": "rag_search",
+        "category": "rag",
+        "description": "ค้นหาเชิงความหมาย — กฎหมาย คำพิพากษา บทความ",
+        "example_prompts": [
+          "คำพิพากษาเรื่องเลิกจ้างเพราะโพสต์โซเชียล",
+          "แนวคำวินิจฉัยศาลฎีกาเรื่องค่าชดเชย"
+        ]
+      },
+      {
+        "name": "rag_ingest",
+        "category": "rag",
+        "description": "เพิ่มเอกสารเข้าฐานข้อมูล RAG (admin)"
+      },
+      {
+        "name": "rag_status",
+        "category": "rag",
+        "description": "ตรวจสอบสถานะ RAG service"
       }
+    ],
+    "skills": [
+      { "name": "legal-consult", "auto": true, "description": "ปรึกษากฎหมายเบื้องต้น" },
+      { "name": "legal-calculate", "auto": true, "description": "คำนวณค่าชดเชย/สิทธิประโยชน์" },
+      { "name": "legal-compare", "auto": true, "description": "เปรียบเทียบทางเลือกทางกฎหมาย" },
+      { "name": "legal-intake", "auto": false, "description": "นัดหมาย/ส่งเรื่องทนาย" },
+      { "name": "legal-draft", "auto": false, "description": "ร่างหนังสือทางกฎหมาย" },
+      { "name": "legal-status", "auto": false, "description": "ดูสถานะ Lead (admin)" }
     ]
+  },
+  "external_services": {
+    "odoo": {
+      "description": "Odoo CRM for lead management",
+      "required": false,
+      "fallback": "in-memory store",
+      "api_contract": "docs/odoo-api-contract.md"
+    },
+    "rag": {
+      "description": "RAG service for semantic search",
+      "required": false,
+      "fallback": "returns error + suggests legal_search",
+      "api_contract": "docs/rag-api-contract.md"
+    }
   },
   "docker": {
     "compose_file": "docker-compose.yml",
     "services": {
       "core": ["legal-mcp", "legal-mcp-http"],
-      "optional": ["odoo", "odoo-db"]
+      "optional": {
+        "with-rag": ["rag-legal", "qdrant"],
+        "with-odoo": ["odoo", "odoo-db"]
+      }
     }
   }
 }

@@ -2,7 +2,7 @@
 
 Thai Legal Assistant — MCP Plugin สำหรับ Claude Marketplace
 
-ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ และนัดหมายทนายความ ผ่าน Claude Code / Claude Desktop
+ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ นัดหมายทนายความ และค้นหาคำพิพากษาด้วย RAG ผ่าน Claude Code / Claude Desktop
 
 ## Demo Flow
 
@@ -12,6 +12,9 @@ Thai Legal Assistant — MCP Plugin สำหรับ Claude Marketplace
 Claude → legal_search("เลิกจ้างไม่เป็นธรรม", years=5)
        → พ.ร.บ.คุ้มครองแรงงาน ม.118, 119 + ค่าชดเชย 180 วัน
 
+Claude → rag_search("เลิกจ้างไม่เป็นธรรม ทำงาน 5 ปี")
+       → คำพิพากษาศาลฎีกาที่เกี่ยวข้อง
+
 Claude → fee_estimate("labor", "consultation")
        → 1,500-3,000 บาท/ครั้ง
 
@@ -20,7 +23,7 @@ Claude → case_intake({name: "...", type: "labor"})
 
 Claude ตอบกลับ:
   "ตามมาตรา 118 ทำงาน 5 ปี มีสิทธิ์ได้ค่าชดเชย 180 วัน..."
-  + นัดพบทนาย / ดูค่าบริการ
+  + คำพิพากษาที่คล้ายกัน + นัดพบทนาย / ดูค่าบริการ
 ```
 
 ## Skill Commands (Slash Commands)
@@ -39,33 +42,25 @@ Claude ตอบกลับ:
 ### ตัวอย่างการใช้
 
 ```bash
-# ปรึกษาเบื้องต้น (Claude จะเรียก legal_search + fee_estimate ให้)
 /legal-consult ถูกเลิกจ้างไม่เป็นธรรม ทำงานมา 5 ปี เงินเดือน 25,000
-
-# คำนวณสิทธิ์ค่าชดเชย
 /legal-calculate อายุงาน 5 ปี เงินเดือน 25,000
-
-# เปรียบเทียบทางเลือก
 /legal-compare ถูกเลิกจ้าง ควรเจรจาหรือฟ้องศาลดี
-
-# ร่างหนังสือทวงถาม
 /legal-draft ทวงถาม ค่าชดเชย 150,000 บาท จากบริษัท ABC
-
-# ส่งเรื่องให้ทนาย
 /legal-intake สมชาย ใจดี แรงงาน ถูกเลิกจ้างไม่มีเหตุผล
-
-# ดูสถานะเรื่อง
 /legal-status
 ```
 
 ## MCP Tools
 
-| Tool | คำอธิบาย |
-|------|---------|
-| `legal_search` | ค้นหากฎหมายไทย + คำนวณค่าชดเชยอัตโนมัติ |
-| `fee_estimate` | ประเมินค่าบริการทนาย (labor / contract / criminal) |
-| `case_intake` | สร้าง Lead → Odoo CRM |
-| `list_leads` | ดู Lead ทั้งหมด (admin) |
+| Tool | หมวด | คำอธิบาย |
+|------|------|---------|
+| `legal_search` | Static | ค้นหากฎหมายไทย + คำนวณค่าชดเชยอัตโนมัติ |
+| `fee_estimate` | Static | ประเมินค่าบริการทนาย (labor / contract / criminal) |
+| `case_intake` | Odoo | สร้าง Lead → Odoo CRM (fallback: in-memory) |
+| `list_leads` | Odoo | ดู Lead ทั้งหมด (admin) |
+| `rag_search` | RAG | semantic search — กฎหมาย / คำพิพากษา / บทความ |
+| `rag_ingest` | RAG | เพิ่มเอกสารเข้า vector DB (admin) |
+| `rag_status` | RAG | ตรวจสอบสถานะ RAG service |
 
 ### Skills + MCP Flow
 
@@ -73,12 +68,13 @@ Claude ตอบกลับ:
 ผู้ใช้: /legal-consult ถูกเลิกจ้าง ทำงาน 5 ปี
         │
         ▼
-┌─ Skill: legal-consult ────────────────┐
-│  1. วิเคราะห์ → ประเภท: แรงงาน        │
-│  2. MCP: legal_search(เลิกจ้าง, 5ปี)  │
-│  3. MCP: fee_estimate(labor, consult)  │
-│  4. ตอบกลับ: มาตรา + ค่าชดเชย + ราคา  │
-└───────────────────────────────────────┘
+┌─ Skill: legal-consult ──────────────────────┐
+│  1. วิเคราะห์ → ประเภท: แรงงาน               │
+│  2. MCP: legal_search(เลิกจ้าง, 5ปี)         │
+│  3. MCP: rag_search(เลิกจ้าง, type=judgment)  │
+│  4. MCP: fee_estimate(labor, consult)         │
+│  5. ตอบกลับ: มาตรา + คำพิพากษา + ราคา         │
+└──────────────────────────────────────────────┘
         │
         ▼
 ผู้ใช้: อยากส่งเรื่องให้ทนาย
@@ -96,18 +92,44 @@ Claude ตอบกลับ:
 ### Run
 
 ```bash
-# Core services (MCP stdio + HTTP/SSE)
+# Core เท่านั้น (Odoo & RAG ใช้ fallback)
 docker compose up -d
 
-# พร้อม Odoo CRM
+# + Odoo CRM
 docker compose --profile with-odoo up -d
+
+# + RAG (Qdrant + RAG service)
+docker compose --profile with-rag up -d
+
+# ทุก service
+docker compose --profile with-odoo --profile with-rag up -d
+```
+
+### Environment Variables
+
+คัดลอก `.env.example` → `.env` แล้วแก้ค่าตามต้องการ:
+
+```bash
+cp .env.example .env
+```
+
+```env
+# Odoo CRM (external)
+ODOO_URL=http://odoo:8069
+ODOO_DB=legal_th
+ODOO_USER=admin
+ODOO_PASS=admin
+
+# RAG Service (external)
+RAG_URL=http://rag-legal:8080
+RAG_API_KEY=
 ```
 
 ### Health Check
 
 ```bash
 curl http://localhost:3001/health
-# {"status":"ok","service":"legal-th-mcp","version":"0.1.0"}
+# {"status":"ok","service":"legal-th-mcp","version":"0.1.0","transport":"streamable-http"}
 ```
 
 ## Connect to Claude
@@ -175,35 +197,89 @@ curl http://localhost:3001/health
 │  ├─ /sse     → SSE fallback (legacy)             │
 │  ├─ /health  → Health check                      │
 │  │                                               │
-│  ├─ legal_search   → ฐานข้อมูลกฎหมาย             │
-│  ├─ fee_estimate   → ตารางค่าบริการ               │
-│  ├─ case_intake    → Odoo CRM                    │
-│  └─ list_leads     → Odoo CRM                   │
-└──────────┬───────────────────────────────────────┘
-           │ (optional)
-┌──────────▼───────────────────────────────────────┐
-│  Odoo 17          :8069                          │
-│  └─ PostgreSQL    (internal)                     │
-└──────────────────────────────────────────────────┘
+│  Tools (7):                                      │
+│  ├─ legal_search   → ฐานข้อมูลกฎหมาย (built-in)  │
+│  ├─ fee_estimate   → ตารางค่าบริการ (built-in)    │
+│  ├─ case_intake  ──┤                             │
+│  ├─ list_leads   ──┘→ Odoo CRM (external)        │
+│  ├─ rag_search   ──┤                             │
+│  ├─ rag_ingest   ──┤→ RAG Service (external)     │
+│  └─ rag_status   ──┘                             │
+└──────┬──────────────────┬────────────────────────┘
+       │                  │
+┌──────▼──────┐    ┌──────▼───────┐
+│ Odoo CRM    │    │ RAG Service  │
+│ :8069 (ext) │    │ :8080 (ext)  │
+│ JSON-RPC    │    │ REST API     │
+│ ┌─────────┐ │    │ ┌──────────┐ │
+│ │ crm.lead│ │    │ │ Qdrant   │ │
+│ └─────────┘ │    │ │ :6333    │ │
+└─────────────┘    │ └──────────┘ │
+                   └──────────────┘
 ```
+
+## External Services
+
+ทุก service ภายนอกมี **graceful fallback** — plugin ทำงานได้แม้ไม่เปิด
+
+| Service | พร้อม | ไม่พร้อม (fallback) |
+|---------|-------|-------------------|
+| **Odoo CRM** | Lead → Odoo (`ODOO-{id}`) | Lead → in-memory (`LEAD-xxx`) |
+| **RAG** | semantic search results | error + แนะนำใช้ `legal_search` |
+
+### API Contracts
+
+- [`docs/odoo-api-contract.md`](docs/odoo-api-contract.md) — Odoo JSON-RPC spec
+- [`docs/rag-api-contract.md`](docs/rag-api-contract.md) — RAG REST API spec
 
 ## Docker Services
 
-| Service | Container | Port | Profile |
-|---------|-----------|------|---------|
-| `legal-mcp` | `legal-th-mcp` | — | default |
-| `legal-mcp-http` | `legal-th-mcp-http` | 3001 | default |
-| `odoo` | `legal-th-odoo` | 8069 | `with-odoo` |
-| `odoo-db` | `legal-th-postgres` | — | `with-odoo` |
+| Service | Container | Port | Profile | คำอธิบาย |
+|---------|-----------|------|---------|---------|
+| `legal-mcp` | `legal-th-mcp` | — | default | MCP server (stdio) |
+| `legal-mcp-http` | `legal-th-mcp-http` | 3001 | default | MCP server (Streamable HTTP + SSE) |
+| `rag-legal` | `legal-th-rag` | 8080 | `with-rag` | RAG service (external image) |
+| `qdrant` | `legal-th-qdrant` | 6333 | `with-rag` | Vector DB |
+| `odoo` | `legal-th-odoo` | 8069 | `with-odoo` | Odoo CRM |
+| `odoo-db` | `legal-th-postgres` | — | `with-odoo` | PostgreSQL for Odoo |
 
 ## Legal Database (PoC)
 
-ฐานข้อมูลปัจจุบันครอบคลุม:
+ฐานข้อมูล built-in ครอบคลุม:
 
 - **พ.ร.บ.คุ้มครองแรงงาน พ.ศ. 2541** — ม.17, 67, 76, 118, 119
 - **พ.ร.บ.จัดตั้งศาลแรงงานฯ พ.ศ. 2522** — ม.49
 
 Fee schedules: แรงงาน / สัญญา / อาญา (consultation, letter, negotiation, litigation, draft, bail)
+
+## Project Structure
+
+```
+legal-service/
+├── .claude/skills/              # Skill commands (6 slash commands)
+│   ├── legal-consult/SKILL.md
+│   ├── legal-calculate/SKILL.md
+│   ├── legal-compare/SKILL.md
+│   ├── legal-intake/SKILL.md
+│   ├── legal-draft/SKILL.md
+│   └── legal-status/SKILL.md
+├── src/
+│   ├── index.ts                 # MCP server (stdio transport)
+│   ├── http-server.ts           # MCP server (Streamable HTTP + SSE)
+│   ├── data/
+│   │   └── labor-law.ts         # Thai labor law knowledge base
+│   └── services/
+│       ├── odoo.ts              # Odoo CRM client (JSON-RPC + fallback)
+│       └── rag.ts               # RAG service client (REST + fallback)
+├── docs/
+│   ├── odoo-api-contract.md     # Odoo integration spec
+│   └── rag-api-contract.md      # RAG integration spec
+├── docker-compose.yml
+├── Dockerfile
+├── marketplace-manifest.json    # Claude Marketplace manifest
+├── claude-mcp-config.json       # MCP connection config examples
+└── .env.example
+```
 
 ## Development
 
@@ -216,11 +292,12 @@ npm run dev        # watch mode
 
 ## Roadmap
 
-- [x] Streamable HTTP transport (MCP 2025-03-26)
+- [x] MCP server with Streamable HTTP transport (MCP 2025-03-26)
 - [x] Skill commands (6 slash commands)
+- [x] RAG MCP tools (external service pattern)
+- [x] Odoo CRM client (JSON-RPC + graceful fallback)
 - [ ] เพิ่มกฎหมายแพ่ง / อาญา / ที่ดิน / ครอบครัว
-- [ ] เชื่อมต่อ Odoo CRM จริง (XML-RPC)
-- [ ] RAG search จากฐานข้อมูลคำพิพากษา
+- [ ] RAG service repo (Qdrant + multilingual embeddings)
 - [ ] Marketplace pricing & billing integration
 
 ## License
