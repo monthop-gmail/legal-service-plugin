@@ -24,6 +24,7 @@ services:
     volumes:
       - ./laws:/app/laws:ro
       - ./scripts:/app/scripts
+      - hf-cache:/root/.cache/huggingface
     environment:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
@@ -42,11 +43,14 @@ services:
       - chromadb
     ports:
       - "8080:8080"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
     environment:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - RAG_API_PORT=8080
       - HF_TOKEN=${HF_TOKEN:-}
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
     networks:
       - legal-net
@@ -132,6 +136,7 @@ services:
 
 volumes:
   chroma-data:
+  hf-cache:
   odoo-data:
   odoo-addons:
   pg-data:

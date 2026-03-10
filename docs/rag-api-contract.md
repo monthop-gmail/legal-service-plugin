@@ -165,6 +165,7 @@ Health check + สถิติ
 | Query prefix | `"query: {query}"` |
 | Distance metric | Cosine |
 | Score calculation | `1 - cosine_distance` (0-1, higher = more relevant) |
+| Model cache | `hf-cache` Docker volume (shared between ingest + rag-legal) |
 
 ---
 

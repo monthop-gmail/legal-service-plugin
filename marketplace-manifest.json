@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "id": "legal-th",
   "name": "Legal Thailand - ทนายความ AI",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา 57 มาตรา (แรงงาน/PDPA/อาญา) ด้วย Semantic Search คำนวณค่าชดเชย ประเมินค่าบริการ และนัดหมายทนายความ",
   "author": {
     "name": "Legal-TH Team",
