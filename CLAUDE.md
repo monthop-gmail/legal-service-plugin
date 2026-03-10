@@ -50,9 +50,12 @@
 | `legal_search(query, years_of_service?)` | ค้นหากฎหมายแรงงาน + คำนวณค่าชดเชย |
 | `fee_estimate(type, service)` | ประเมินค่าทนายความ |
 | `case_intake(name, phone, email, case_type, description)` | สร้าง Lead ใน CRM |
-| `list_leads()` | ดูรายการ Lead ทั้งหมด |
-| `rag_search(query, type?, top_k?)` | ค้นหาเชิงความหมาย (semantic search) จาก ChromaDB |
-| `rag_ingest(content, source, type, ...)` | เพิ่มเอกสารเข้าฐานข้อมูล |
+| `list_leads()` | ดูรายการ Lead ทั้งหมด (stdio only) |
+| `rag_search(query, type?, top_k?, search_mode?)` | ค้นหาจากฐานข้อมูล — hybrid/vector/keyword (BM25+RRF) |
+| `rag_ingest(content, source, type, ...)` | เพิ่มเอกสาร text เข้าฐานข้อมูล |
+| `rag_ingest_url(url, source?, type?)` | ดึงเนื้อหาจาก URL แล้วเพิ่มเข้าฐานข้อมูล (มี SSRF protection) |
+| `rag_list_documents()` | แสดงรายการเอกสารทั้งหมด |
+| `rag_delete(doc_id)` | ลบเอกสารออกจากฐานข้อมูล |
 | `rag_status()` | ตรวจสอบสถานะ RAG service |
 
 ### กฎหมายในระบบ:

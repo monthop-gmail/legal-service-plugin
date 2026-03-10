@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { searchLaws, calculateCompensation, getFeeEstimate, FEE_SCHEDULES } from "./data/labor-law.js";
 import { createLead, getLeads } from "./services/odoo.js";
-import { ragSearch, ragIngest, ragHealth } from "./services/rag.js";
+import { ragSearch, ragIngest, ragIngestUrl, ragListDocuments, ragDeleteDocument, ragHealth } from "./services/rag.js";
 
 const server = new McpServer({
   name: "legal-th",
@@ -199,13 +199,16 @@ server.tool(
     type: z.enum(["law", "judgment", "regulation", "article", "all"]).optional()
       .describe("กรองประเภท: law=ตัวบท, judgment=คำพิพากษา, regulation=กฎกระทรวง, article=บทความ, all=ทั้งหมด"),
     top_k: z.number().optional().describe("จำนวนผลลัพธ์ (default: 5, max: 20)"),
+    search_mode: z.enum(["vector", "keyword", "hybrid"]).optional()
+      .describe("โหมดค้นหา: vector=เชิงความหมาย, keyword=คำสำคัญ(BM25), hybrid=ผสม(default)"),
   },
-  async ({ query, type, top_k }) => {
+  async ({ query, type, top_k, search_mode }) => {
     try {
       const results = await ragSearch({
         query,
         filter_type: type === "all" ? undefined : type,
         top_k: Math.min(top_k || 5, 20),
+        search_mode: search_mode || "hybrid",
       });
 
       return {
@@ -289,7 +292,61 @@ server.tool(
   }
 );
 
-// ─── Tool 7: rag_status ─────────────────────────────────────────
+// ─── Tool 7: rag_ingest_url ─────────────────────────────────────
+server.tool(
+  "rag_ingest_url",
+  "ดึงเนื้อหาจาก URL แล้วเพิ่มเข้าฐานข้อมูล RAG (มี SSRF protection)",
+  {
+    url: z.string().describe("URL ของเอกสาร"),
+    source: z.string().optional().describe("ชื่อแหล่งที่มา"),
+    type: z.enum(["law", "judgment", "regulation", "article"]).optional().describe("ประเภท (default: article)"),
+  },
+  async ({ url, source, type }) => {
+    try {
+      const metadata: Record<string, string> = {};
+      if (source) metadata.source = source;
+      if (type) metadata.type = type;
+      const result = await ragIngestUrl({ url, metadata });
+      return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }] };
+    } catch (err: any) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }] };
+    }
+  }
+);
+
+// ─── Tool 8: rag_list_documents ─────────────────────────────────
+server.tool(
+  "rag_list_documents",
+  "แสดงรายการเอกสารทั้งหมดในฐานข้อมูล RAG",
+  {},
+  async () => {
+    try {
+      const docs = await ragListDocuments();
+      return { content: [{ type: "text" as const, text: JSON.stringify({ total: docs.length, documents: docs }, null, 2) }] };
+    } catch (err: any) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: err.message }, null, 2) }] };
+    }
+  }
+);
+
+// ─── Tool 9: rag_delete ─────────────────────────────────────────
+server.tool(
+  "rag_delete",
+  "ลบเอกสารออกจากฐานข้อมูล RAG (admin)",
+  {
+    doc_id: z.string().describe("Document ID ที่ต้องการลบ"),
+  },
+  async ({ doc_id }) => {
+    try {
+      const result = await ragDeleteDocument(doc_id);
+      return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }] };
+    } catch (err: any) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }] };
+    }
+  }
+);
+
+// ─── Tool 10: rag_status ────────────────────────────────────────
 server.tool(
   "rag_status",
   "ตรวจสอบสถานะ RAG service และจำนวนเอกสารในฐานข้อมูล",

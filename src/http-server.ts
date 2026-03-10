@@ -6,7 +6,7 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 import { randomUUID } from "crypto";
 import { searchLaws, calculateCompensation, getFeeEstimate, FEE_SCHEDULES } from "./data/labor-law.js";
 import { createLead, getLeads } from "./services/odoo.js";
-import { ragSearch, ragIngest, ragHealth } from "./services/rag.js";
+import { ragSearch, ragIngest, ragIngestUrl, ragListDocuments, ragDeleteDocument, ragHealth } from "./services/rag.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3001");
 
@@ -107,18 +107,20 @@ function createLegalServer(): McpServer {
   // ─── RAG tools ───────────────────────────────────────────
   server.tool(
     "rag_search",
-    "ค้นหาเชิงความหมาย (semantic search) จากฐานข้อมูลกฎหมาย คำพิพากษา บทความ",
+    "ค้นหาจากฐานข้อมูลกฎหมาย รองรับ hybrid/vector/keyword search",
     {
-      query: z.string().describe("คำค้นหาเชิงความหมาย"),
+      query: z.string().describe("คำค้นหา"),
       type: z.enum(["law", "judgment", "regulation", "article", "all"]).optional().describe("กรองประเภท"),
       top_k: z.number().optional().describe("จำนวนผลลัพธ์ (default: 5)"),
+      search_mode: z.enum(["vector", "keyword", "hybrid"]).optional().describe("โหมดค้นหา (default: hybrid)"),
     },
-    async ({ query, type, top_k }) => {
+    async ({ query, type, top_k, search_mode }) => {
       try {
         const results = await ragSearch({
           query,
           filter_type: type === "all" ? undefined : type,
           top_k: Math.min(top_k || 5, 20),
+          search_mode: search_mode || "hybrid",
         });
         return {
           content: [{
@@ -158,6 +160,57 @@ function createLegalServer(): McpServer {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }],
         };
+      }
+    }
+  );
+
+  server.tool(
+    "rag_ingest_url",
+    "ดึงเนื้อหาจาก URL แล้วเพิ่มเข้าฐานข้อมูล RAG (มี SSRF protection)",
+    {
+      url: z.string().describe("URL ของเอกสาร"),
+      source: z.string().optional().describe("ชื่อแหล่งที่มา"),
+      type: z.enum(["law", "judgment", "regulation", "article"]).optional().describe("ประเภท (default: article)"),
+    },
+    async ({ url, source, type }) => {
+      try {
+        const metadata: Record<string, string> = {};
+        if (source) metadata.source = source;
+        if (type) metadata.type = type;
+        const result = await ragIngestUrl({ url, metadata });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }] };
+      }
+    }
+  );
+
+  server.tool(
+    "rag_list_documents",
+    "แสดงรายการเอกสารทั้งหมดในฐานข้อมูล RAG",
+    {},
+    async () => {
+      try {
+        const docs = await ragListDocuments();
+        return { content: [{ type: "text" as const, text: JSON.stringify({ total: docs.length, documents: docs }, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: err.message }, null, 2) }] };
+      }
+    }
+  );
+
+  server.tool(
+    "rag_delete",
+    "ลบเอกสารออกจากฐานข้อมูล RAG (admin)",
+    {
+      doc_id: z.string().describe("Document ID ที่ต้องการลบ"),
+    },
+    async ({ doc_id }) => {
+      try {
+        const result = await ragDeleteDocument(doc_id);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }] };
       }
     }
   );
