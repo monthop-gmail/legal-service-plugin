@@ -1,5 +1,7 @@
 # ⚖️ Legal-TH MCP Plugin
 
+> **Repo:** [github.com/monthop-gmail/legal-service-plugin](https://github.com/monthop-gmail/legal-service-plugin)
+
 Thai Legal Assistant — MCP Plugin สำหรับ Claude Marketplace
 
 ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ นัดหมายทนายความ และค้นหาคำพิพากษาด้วย RAG ผ่าน Claude Code / Claude Desktop
@@ -94,14 +96,14 @@ Claude ตอบกลับ:
 ### Step 2: Install plugin
 
 ```bash
-/plugin install legal-th@monthop-gmail-poc-legal-service
+/plugin install legal-th@monthop-gmail-legal-service-plugin
 ```
 
 ### Step 3: Start Docker services
 
 ```bash
 git clone https://github.com/monthop-gmail/legal-service-plugin.git
-cd poc-legal-service
+cd legal-service-plugin
 docker compose up -d
 ```
 
@@ -109,7 +111,7 @@ docker compose up -d
 
 > **Dev mode**: ทดสอบ plugin จาก local directory
 > ```bash
-> claude --plugin-dir ./poc-legal-service
+> claude --plugin-dir ./legal-service-plugin
 > ```
 
 ---
@@ -213,7 +215,7 @@ curl http://localhost:3001/health
 └──────────┬───────────────────────────────────────┘
            │
 ┌──────────▼───────────────────────────────────────┐
-│  Skills Layer (.claude/skills/)                  │
+│  Skills Layer (skills/)                          │
 │  ├─ /legal-consult   → ปรึกษากฎหมาย (auto)       │
 │  ├─ /legal-calculate → คำนวณค่าชดเชย (auto)      │
 │  ├─ /legal-compare   → เปรียบเทียบทางเลือก (auto) │
