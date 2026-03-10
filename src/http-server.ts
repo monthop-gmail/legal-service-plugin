@@ -1,13 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
-import { createServer } from "http";
+import { createServer, IncomingMessage, ServerResponse } from "http";
+import { randomUUID } from "crypto";
 import { searchLaws, calculateCompensation, getFeeEstimate, FEE_SCHEDULES } from "./data/labor-law.js";
 import { createLead, getLeads } from "./services/odoo.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3001");
 
-// Reuse same tool definitions — extract to shared module in production
+// ─── Shared tool registration ────────────────────────────────
 function createLegalServer(): McpServer {
   const server = new McpServer({ name: "legal-th", version: "0.1.0" });
 
@@ -104,16 +106,112 @@ function createLegalServer(): McpServer {
   return server;
 }
 
-// SSE HTTP Server
-const sessions = new Map<string, SSEServerTransport>();
+// ─── Streamable HTTP (primary) ───────────────────────────────
+// Stateful: 1 transport per session, server manages session IDs
+const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
 
+async function handleStreamableHTTP(req: IncomingMessage, res: ServerResponse) {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+  // Existing session → delegate
+  if (sessionId && sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)!;
+    await session.transport.handleRequest(req, res);
+    return;
+  }
+
+  // New session (POST initialize) or stateless
+  if (req.method === "POST") {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (id) => {
+        sessions.set(id, { transport, server });
+        console.error(`[Streamable HTTP] Session created: ${id}`);
+      },
+    });
+
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        sessions.delete(transport.sessionId);
+        console.error(`[Streamable HTTP] Session closed: ${transport.sessionId}`);
+      }
+    };
+
+    const server = createLegalServer();
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+    return;
+  }
+
+  // GET on /mcp without session → 400
+  if (req.method === "GET") {
+    if (!sessionId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing Mcp-Session-Id header for GET" }));
+      return;
+    }
+    // Unknown session
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Session not found" }));
+    return;
+  }
+
+  // DELETE → close session
+  if (req.method === "DELETE") {
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!;
+      await session.transport.close();
+      sessions.delete(sessionId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ closed: true }));
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Session not found" }));
+    return;
+  }
+
+  res.writeHead(405, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Method not allowed" }));
+}
+
+// ─── SSE fallback (backward compat) ─────────────────────────
+const sseSessions = new Map<string, SSEServerTransport>();
+
+async function handleSSE(req: IncomingMessage, res: ServerResponse, url: URL) {
+  if (url.pathname === "/sse" && req.method === "GET") {
+    const transport = new SSEServerTransport("/message", res);
+    const server = createLegalServer();
+    sseSessions.set(transport.sessionId, transport);
+    res.on("close", () => sseSessions.delete(transport.sessionId));
+    await server.connect(transport);
+    return;
+  }
+
+  if (url.pathname === "/message" && req.method === "POST") {
+    const sessionId = url.searchParams.get("sessionId");
+    if (!sessionId || !sseSessions.has(sessionId)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Session not found" }));
+      return;
+    }
+    await sseSessions.get(sessionId)!.handlePostMessage(req, res);
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+}
+
+// ─── HTTP Router ─────────────────────────────────────────────
 const httpServer = createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://localhost:${PORT}`);
 
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Session-Id");
+  res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -124,43 +222,36 @@ const httpServer = createServer(async (req, res) => {
   // Health check
   if (url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", service: "legal-th-mcp", version: "0.1.0" }));
+    res.end(JSON.stringify({
+      status: "ok",
+      service: "legal-th-mcp",
+      version: "0.1.0",
+      transport: "streamable-http",
+      active_sessions: sessions.size,
+      sse_sessions: sseSessions.size,
+    }));
     return;
   }
 
-  // SSE endpoint — client connects here
-  if (url.pathname === "/sse" && req.method === "GET") {
-    const transport = new SSEServerTransport("/message", res);
-    const server = createLegalServer();
-    sessions.set(transport.sessionId, transport);
-
-    res.on("close", () => {
-      sessions.delete(transport.sessionId);
-    });
-
-    await server.connect(transport);
+  // Streamable HTTP endpoint (primary)
+  if (url.pathname === "/mcp") {
+    await handleStreamableHTTP(req, res);
     return;
   }
 
-  // Message endpoint — client sends MCP messages here
-  if (url.pathname === "/message" && req.method === "POST") {
-    const sessionId = url.searchParams.get("sessionId");
-    if (!sessionId || !sessions.has(sessionId)) {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Session not found" }));
-      return;
-    }
-
-    const transport = sessions.get(sessionId)!;
-    await transport.handlePostMessage(req, res);
+  // SSE fallback endpoints
+  if (url.pathname === "/sse" || url.pathname === "/message") {
+    await handleSSE(req, res, url);
     return;
   }
 
-  // 404
   res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "Not found" }));
+  res.end(JSON.stringify({ error: "Not found", endpoints: ["/mcp", "/sse", "/health"] }));
 });
 
 httpServer.listen(PORT, () => {
-  console.error(`🏛️ Legal-TH MCP HTTP/SSE Server running on port ${PORT}`);
+  console.error(`⚖️ Legal-TH MCP Server v0.1.0`);
+  console.error(`  Streamable HTTP → http://0.0.0.0:${PORT}/mcp`);
+  console.error(`  SSE fallback    → http://0.0.0.0:${PORT}/sse`);
+  console.error(`  Health check    → http://0.0.0.0:${PORT}/health`);
 });

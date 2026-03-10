@@ -21,7 +21,7 @@
     ]
   },
   "mcp": {
-    "transport": ["stdio", "sse"],
+    "transport": ["streamable-http", "stdio", "sse"],
     "tools": [
       {
         "name": "legal_search",

@@ -57,9 +57,21 @@ curl http://localhost:3001/health
 
 ## Connect to Claude
 
-### Claude Code (stdio)
+### Streamable HTTP (recommended)
 
-เพิ่มใน `~/.claude/settings.json`:
+เพิ่มใน `~/.claude/settings.json` หรือ `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "legal-th": {
+      "url": "http://localhost:3001/mcp"
+    }
+  }
+}
+```
+
+### stdio (alternative)
 
 ```json
 {
@@ -72,9 +84,7 @@ curl http://localhost:3001/health
 }
 ```
 
-### Claude Desktop (SSE)
-
-เพิ่มใน `claude_desktop_config.json`:
+### SSE (legacy fallback)
 
 ```json
 {
@@ -93,9 +103,12 @@ curl http://localhost:3001/health
 │  Claude Code / Claude Desktop                │
 │  ผู้ใช้: "ถูกเลิกจ้างไม่เป็นธรรม"              │
 └──────────┬───────────────────────────────────┘
-           │ MCP (stdio / SSE)
+           │ MCP (Streamable HTTP / stdio / SSE)
 ┌──────────▼───────────────────────────────────┐
-│  legal-th-mcp          :3001 (HTTP/SSE)      │
+│  legal-th-mcp          :3001                 │
+│  ├─ /mcp     → Streamable HTTP (primary)     │
+│  ├─ /sse     → SSE fallback (legacy)         │
+│  ├─ /health  → Health check                  │
 │  ├─ legal_search   → ฐานข้อมูลกฎหมาย         │
 │  ├─ fee_estimate   → ตารางค่าบริการ           │
 │  ├─ case_intake    → Odoo CRM               │
@@ -140,7 +153,7 @@ npm run dev        # watch mode
 - [ ] เพิ่มกฎหมายแพ่ง / อาญา / ที่ดิน / ครอบครัว
 - [ ] เชื่อมต่อ Odoo CRM จริง (XML-RPC)
 - [ ] RAG search จากฐานข้อมูลคำพิพากษา
-- [ ] Streamable HTTP transport (MCP 2025-03-26)
+- [x] Streamable HTTP transport (MCP 2025-03-26)
 - [ ] Marketplace pricing & billing integration
 
 ## License

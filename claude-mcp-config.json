@@ -2,12 +2,16 @@
   "_comment": "เพิ่มใน ~/.claude/settings.json หรือ claude_desktop_config.json",
   "mcpServers": {
     "legal-th": {
+      "_comment": "Recommended: Streamable HTTP (MCP 2025-03-26)",
+      "url": "http://localhost:3001/mcp"
+    },
+    "legal-th-stdio": {
+      "_comment": "Alternative: stdio via docker exec",
       "command": "docker",
-      "args": ["exec", "-i", "legal-th-mcp", "node", "dist/index.js"],
-      "env": {}
+      "args": ["exec", "-i", "legal-th-mcp", "node", "dist/index.js"]
     },
     "legal-th-sse": {
-      "_comment": "Alternative: SSE transport (ไม่ต้อง docker exec)",
+      "_comment": "Fallback: legacy SSE transport",
       "url": "http://localhost:3001/sse"
     }
   }
