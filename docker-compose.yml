@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ─── MCP Server (Legal-TH) ──────────────────────────────
   legal-mcp:
@@ -8,19 +6,19 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - ODOO_URL=http://odoo:8069
-      - ODOO_DB=legal_th
-      - ODOO_USER=admin
+      # Odoo CRM (external)
+      - ODOO_URL=${ODOO_URL:-http://odoo:8069}
+      - ODOO_DB=${ODOO_DB:-legal_th}
+      - ODOO_USER=${ODOO_USER:-admin}
       - ODOO_PASS=${ODOO_PASS:-admin}
-      - RAG_URL=http://rag-legal:8080
+      # RAG (external)
+      - RAG_URL=${RAG_URL:-http://rag-legal:8080}
       - RAG_API_KEY=${RAG_API_KEY:-}
-    # MCP ใช้ stdio — container นี้จะถูกเรียกผ่าน docker exec
-    # หรือเปิด HTTP wrapper (ดู legal-mcp-http)
     stdin_open: true
     networks:
       - legal-net
 
-  # ─── HTTP Wrapper (SSE transport สำหรับ Claude Desktop) ─
+  # ─── HTTP Transport (Streamable HTTP + SSE) ─────────────
   legal-mcp-http:
     build: .
     container_name: legal-th-mcp-http
@@ -31,15 +29,18 @@ services:
     environment:
       - NODE_ENV=production
       - MCP_HTTP_PORT=3001
-      - ODOO_URL=http://odoo:8069
-      - ODOO_DB=legal_th
-      - RAG_URL=http://rag-legal:8080
+      # Odoo CRM (external)
+      - ODOO_URL=${ODOO_URL:-http://odoo:8069}
+      - ODOO_DB=${ODOO_DB:-legal_th}
+      - ODOO_USER=${ODOO_USER:-admin}
+      - ODOO_PASS=${ODOO_PASS:-admin}
+      # RAG (external)
+      - RAG_URL=${RAG_URL:-http://rag-legal:8080}
       - RAG_API_KEY=${RAG_API_KEY:-}
     networks:
       - legal-net
 
   # ─── RAG Service (external — แยก repo) ──────────────────
-  # ใช้ profile "with-rag" เปิดเมื่อมี RAG service image พร้อม
   rag-legal:
     image: ${RAG_IMAGE:-ghcr.io/monthop-gmail/rag-legal-th:latest}
     container_name: legal-th-rag
@@ -56,7 +57,7 @@ services:
     profiles:
       - with-rag
 
-  # ─── Qdrant Vector DB ──────────────────────────────────────
+  # ─── Qdrant Vector DB ──────────────────────────────────
   qdrant:
     image: qdrant/qdrant:v1.13.2
     container_name: legal-th-qdrant
@@ -72,7 +73,7 @@ services:
     profiles:
       - with-rag
 
-  # ─── Odoo CRM (optional — เปิดเมื่อต้องการ CRM จริง) ───
+  # ─── Odoo CRM (external — แยก deploy) ──────────────────
   odoo:
     image: odoo:17.0
     container_name: legal-th-odoo
