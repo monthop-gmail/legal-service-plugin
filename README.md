@@ -88,7 +88,7 @@ Claude ตอบกลับ:
 ### Step 1: Add marketplace
 
 ```bash
-/plugin marketplace add monthop-gmail/poc-legal-service
+/plugin marketplace add monthop-gmail/legal-service-plugin
 ```
 
 ### Step 2: Install plugin
@@ -100,7 +100,7 @@ Claude ตอบกลับ:
 ### Step 3: Start Docker services
 
 ```bash
-git clone https://github.com/monthop-gmail/poc-legal-service.git
+git clone https://github.com/monthop-gmail/legal-service-plugin.git
 cd poc-legal-service
 docker compose up -d
 ```
