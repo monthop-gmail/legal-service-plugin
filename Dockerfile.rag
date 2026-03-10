@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY scripts/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY scripts/rag_api.py /app/scripts/rag_api.py
+
+EXPOSE 8080
+
+CMD ["python", "scripts/rag_api.py"]

@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "id": "legal-th",
   "name": "Legal Thailand - ทนายความ AI",
-  "version": "0.1.0",
-  "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ ค้นหาคำพิพากษาด้วย RAG และนัดหมายทนายความ",
+  "version": "0.2.0",
+  "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา 57 มาตรา (แรงงาน/PDPA/อาญา) ด้วย Semantic Search คำนวณค่าชดเชย ประเมินค่าบริการ และนัดหมายทนายความ",
   "author": {
     "name": "Legal-TH Team",
     "url": "https://legal-th.example.com"
@@ -26,7 +26,7 @@
       {
         "name": "legal_search",
         "category": "static",
-        "description": "ค้นหากฎหมายไทย + คำนวณค่าชดเชย",
+        "description": "ค้นหากฎหมายแรงงาน + คำนวณค่าชดเชย",
         "example_prompts": [
           "ถูกเลิกจ้างไม่เป็นธรรม ทำงานมา 5 ปี",
           "สิทธิลาป่วยตามกฎหมาย",
@@ -59,10 +59,11 @@
       {
         "name": "rag_search",
         "category": "rag",
-        "description": "ค้นหาเชิงความหมาย — กฎหมาย คำพิพากษา บทความ",
+        "description": "Semantic search — กฎหมาย 57 มาตรา (ChromaDB + multilingual-e5)",
         "example_prompts": [
-          "คำพิพากษาเรื่องเลิกจ้างเพราะโพสต์โซเชียล",
-          "แนวคำวินิจฉัยศาลฎีกาเรื่องค่าชดเชย"
+          "ข้อมูลส่วนบุคคลรั่วไหล โทษเท่าไหร่",
+          "ลักทรัพย์ในเวลากลางคืน",
+          "สิทธิลาคลอด"
         ]
       },
       {
@@ -73,7 +74,7 @@
       {
         "name": "rag_status",
         "category": "rag",
-        "description": "ตรวจสอบสถานะ RAG service"
+        "description": "ตรวจสอบสถานะ RAG service + ChromaDB"
       }
     ],
     "skills": [
@@ -93,7 +94,7 @@
       "api_contract": "docs/odoo-api-contract.md"
     },
     "rag": {
-      "description": "RAG service for semantic search",
+      "description": "Built-in RAG service (ChromaDB + multilingual-e5-base)",
       "required": false,
       "fallback": "returns error + suggests legal_search",
       "api_contract": "docs/rag-api-contract.md"
@@ -102,9 +103,8 @@
   "docker": {
     "compose_file": "docker-compose.yml",
     "services": {
-      "core": ["legal-mcp", "legal-mcp-http"],
+      "core": ["chromadb", "ingest", "rag-legal", "legal-mcp", "legal-mcp-http"],
       "optional": {
-        "with-rag": ["rag-legal", "qdrant"],
         "with-odoo": ["odoo", "odoo-db"]
       }
     }
