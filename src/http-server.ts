@@ -6,6 +6,7 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 import { randomUUID } from "crypto";
 import { searchLaws, calculateCompensation, getFeeEstimate, FEE_SCHEDULES } from "./data/labor-law.js";
 import { createLead, getLeads } from "./services/odoo.js";
+import { ragSearch, ragIngest, ragHealth } from "./services/rag.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3001");
 
@@ -100,6 +101,78 @@ function createLegalServer(): McpServer {
           }, null, 2),
         }],
       };
+    }
+  );
+
+  // ─── RAG tools ───────────────────────────────────────────
+  server.tool(
+    "rag_search",
+    "ค้นหาเชิงความหมาย (semantic search) จากฐานข้อมูลกฎหมาย คำพิพากษา บทความ",
+    {
+      query: z.string().describe("คำค้นหาเชิงความหมาย"),
+      type: z.enum(["law", "judgment", "regulation", "article", "all"]).optional().describe("กรองประเภท"),
+      top_k: z.number().optional().describe("จำนวนผลลัพธ์ (default: 5)"),
+    },
+    async ({ query, type, top_k }) => {
+      try {
+        const results = await ragSearch({
+          query,
+          filter_type: type === "all" ? undefined : type,
+          top_k: Math.min(top_k || 5, 20),
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ found: results.length > 0, total: results.length, results }, null, 2),
+          }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ found: false, error: "RAG service unavailable", message: err.message }, null, 2),
+          }],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "rag_ingest",
+    "เพิ่มเอกสารกฎหมายเข้าฐานข้อมูล RAG (admin)",
+    {
+      content: z.string().describe("เนื้อหาเอกสาร"),
+      source: z.string().describe("แหล่งที่มา"),
+      type: z.enum(["law", "judgment", "regulation", "article"]).describe("ประเภท"),
+      section: z.string().optional().describe("มาตรา / เลขคดี"),
+      year: z.number().optional().describe("ปี พ.ศ."),
+      tags: z.array(z.string()).optional().describe("แท็ก"),
+    },
+    async ({ content, source, type, section, year, tags }) => {
+      try {
+        const result = await ragIngest({ content, metadata: { source, type, section, year, tags } });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: err.message }, null, 2) }],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "rag_status",
+    "ตรวจสอบสถานะ RAG service",
+    {},
+    async () => {
+      try {
+        const health = await ragHealth();
+        return { content: [{ type: "text" as const, text: JSON.stringify({ connected: true, ...health }, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ connected: false, error: err.message }, null, 2) }] };
+      }
     }
   );
 

@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { searchLaws, calculateCompensation, getFeeEstimate, FEE_SCHEDULES } from "./data/labor-law.js";
 import { createLead, getLeads } from "./services/odoo.js";
+import { ragSearch, ragIngest, ragHealth } from "./services/rag.js";
 
 const server = new McpServer({
   name: "legal-th",
@@ -186,6 +187,137 @@ server.tool(
         },
       ],
     };
+  }
+);
+
+// ─── Tool 5: rag_search ─────────────────────────────────────────
+server.tool(
+  "rag_search",
+  "ค้นหาเชิงความหมาย (semantic search) จากฐานข้อมูลกฎหมาย คำพิพากษา บทความ — ใช้เมื่อ legal_search ไม่พบข้อมูล หรือต้องการค้นหาคำพิพากษาศาลฎีกา/บทความวิชาการ",
+  {
+    query: z.string().describe("คำค้นหาเชิงความหมาย เช่น 'พนักงานถูกเลิกจ้างเพราะโพสต์วิจารณ์บริษัทในโซเชียล'"),
+    type: z.enum(["law", "judgment", "regulation", "article", "all"]).optional()
+      .describe("กรองประเภท: law=ตัวบท, judgment=คำพิพากษา, regulation=กฎกระทรวง, article=บทความ, all=ทั้งหมด"),
+    top_k: z.number().optional().describe("จำนวนผลลัพธ์ (default: 5, max: 20)"),
+  },
+  async ({ query, type, top_k }) => {
+    try {
+      const results = await ragSearch({
+        query,
+        filter_type: type === "all" ? undefined : type,
+        top_k: Math.min(top_k || 5, 20),
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            found: results.length > 0,
+            total: results.length,
+            results: results.map((r) => ({
+              score: r.score,
+              source: r.metadata.source,
+              type: r.metadata.type,
+              section: r.metadata.section,
+              year: r.metadata.year,
+              content: r.content,
+              tags: r.metadata.tags,
+            })),
+            disclaimer: "⚠️ ผลลัพธ์จาก RAG search อาจไม่ครบถ้วน กรุณาตรวจสอบกับแหล่งข้อมูลต้นฉบับ",
+          }, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            found: false,
+            error: "RAG service unavailable",
+            message: err.message,
+            fallback: "ใช้ legal_search สำหรับค้นหาจากฐานข้อมูลหลัก",
+          }, null, 2),
+        }],
+      };
+    }
+  }
+);
+
+// ─── Tool 6: rag_ingest ─────────────────────────────────────────
+server.tool(
+  "rag_ingest",
+  "เพิ่มเอกสารกฎหมายเข้าฐานข้อมูล RAG (สำหรับ admin) — รับข้อความ + metadata แล้ว chunk & embed อัตโนมัติ",
+  {
+    content: z.string().describe("เนื้อหาเอกสาร (ข้อความเต็ม)"),
+    source: z.string().describe("แหล่งที่มา เช่น 'พ.ร.บ.คุ้มครองแรงงาน พ.ศ. 2541'"),
+    type: z.enum(["law", "judgment", "regulation", "article"]).describe("ประเภทเอกสาร"),
+    section: z.string().optional().describe("มาตรา / เลขคดี เช่น 'มาตรา 118' หรือ 'ฎ.1234/2565'"),
+    year: z.number().optional().describe("ปี พ.ศ. ของเอกสาร"),
+    tags: z.array(z.string()).optional().describe("แท็ก เช่น ['แรงงาน', 'เลิกจ้าง', 'ค่าชดเชย']"),
+  },
+  async ({ content, source, type, section, year, tags }) => {
+    try {
+      const result = await ragIngest({
+        content,
+        metadata: { source, type, section, year, tags },
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            success: true,
+            id: result.id,
+            status: result.status,
+            chunks: result.chunks,
+            message: `เพิ่มเอกสารสำเร็จ (${result.chunks} chunks)`,
+          }, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            success: false,
+            error: "RAG service unavailable",
+            message: err.message,
+          }, null, 2),
+        }],
+      };
+    }
+  }
+);
+
+// ─── Tool 7: rag_status ─────────────────────────────────────────
+server.tool(
+  "rag_status",
+  "ตรวจสอบสถานะ RAG service และจำนวนเอกสารในฐานข้อมูล",
+  {},
+  async () => {
+    try {
+      const health = await ragHealth();
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            connected: true,
+            ...health,
+          }, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            connected: false,
+            error: err.message,
+            hint: "RAG service ยังไม่พร้อม — ใช้ legal_search สำหรับค้นหาจากฐานข้อมูลหลักแทน",
+          }, null, 2),
+        }],
+      };
+    }
   }
 );
 
