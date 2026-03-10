@@ -381,6 +381,7 @@ npm run dev        # watch mode
 
 ## Roadmap
 
+### ✅ Done (v0.2.1)
 - [x] MCP server with Streamable HTTP transport (MCP 2025-03-26)
 - [x] Skill commands (6 slash commands)
 - [x] RAG MCP tools (external service pattern)
@@ -390,8 +391,33 @@ npm run dev        # watch mode
 - [x] CLAUDE.md system prompt
 - [x] Shared HF model cache (hf-cache volume) + PYTHONUNBUFFERED
 - [x] `.mcp.json` type: http สำหรับ Claude Code auto-discovery
-- [ ] เพิ่มกฎหมายแพ่ง / ที่ดิน / ครอบครัว / คอมพิวเตอร์
+
+### 🔜 Phase 1 — Bug Fix & Quick Wins
+- [ ] เพิ่ม `list_leads` tool ใน http-server.ts (ปัจจุบันมีเฉพาะ stdio)
+- [ ] ตั้ง default `min_score: 0.83` ใน rag_search เพื่อกรองผลลัพธ์ที่ไม่เกี่ยวข้อง
+- [ ] เพิ่ม Skill: `/legal-search` (ค้นหามาตราตรง), `/legal-faq` (คำถามที่พบบ่อย)
+
+### 📚 Phase 2 — ขยายฐานข้อมูลกฎหมาย
+- [ ] ประมวลกฎหมายแพ่งและพาณิชย์ (สัญญา / ละเมิด / ทรัพย์)
+- [ ] กฎหมายครอบครัวและมรดก
+- [ ] กฎหมายที่ดินและสิ่งปลูกสร้าง
+- [ ] พ.ร.บ.ว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์
+- [ ] ประมวลรัษฎากร (ภาษีอากร)
+- [ ] คำพิพากษาศาลฎีกาที่สำคัญ (ingest เข้า RAG)
+
+### 🔐 Phase 3 — Production Hardening
+- [ ] Authentication (API key / OAuth) สำหรับ MCP HTTP endpoint
+- [ ] Rate limiting ป้องกัน abuse
+- [ ] Odoo CRM end-to-end testing (ทดสอบกับ Odoo จริง)
+- [ ] Health check & auto-restart สำหรับ RAG service
+- [ ] Logging & error tracking (structured logs)
+
+### 🚀 Phase 4 — Marketplace & Scale
 - [ ] Marketplace pricing & billing integration
+- [ ] Multi-tenant — แยก ChromaDB collection per สำนักงาน
+- [ ] Monitoring & analytics dashboard (สถิติการใช้งาน, คำถามยอดนิยม)
+- [ ] Fine-tuned embedding สำหรับกฎหมายไทยโดยเฉพาะ
+- [ ] CI/CD pipeline (auto test + deploy)
 
 ## License
 
