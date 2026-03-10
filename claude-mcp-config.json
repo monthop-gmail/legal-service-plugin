@@ -1,0 +1,14 @@
+{
+  "_comment": "เพิ่มใน ~/.claude/settings.json หรือ claude_desktop_config.json",
+  "mcpServers": {
+    "legal-th": {
+      "command": "docker",
+      "args": ["exec", "-i", "legal-th-mcp", "node", "dist/index.js"],
+      "env": {}
+    },
+    "legal-th-sse": {
+      "_comment": "Alternative: SSE transport (ไม่ต้อง docker exec)",
+      "url": "http://localhost:3001/sse"
+    }
+  }
+}

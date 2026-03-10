@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  # ─── MCP Server (Legal-TH) ──────────────────────────────
+  legal-mcp:
+    build: .
+    container_name: legal-th-mcp
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - ODOO_URL=http://odoo:8069
+      - ODOO_DB=legal_th
+      - ODOO_USER=admin
+      - ODOO_PASS=${ODOO_PASS:-admin}
+    # MCP ใช้ stdio — container นี้จะถูกเรียกผ่าน docker exec
+    # หรือเปิด HTTP wrapper (ดู legal-mcp-http)
+    stdin_open: true
+    networks:
+      - legal-net
+
+  # ─── HTTP Wrapper (SSE transport สำหรับ Claude Desktop) ─
+  legal-mcp-http:
+    build: .
+    container_name: legal-th-mcp-http
+    restart: unless-stopped
+    command: ["node", "dist/http-server.js"]
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - MCP_HTTP_PORT=3001
+      - ODOO_URL=http://odoo:8069
+      - ODOO_DB=legal_th
+    networks:
+      - legal-net
+
+  # ─── Odoo CRM (optional — เปิดเมื่อต้องการ CRM จริง) ───
+  odoo:
+    image: odoo:17.0
+    container_name: legal-th-odoo
+    depends_on:
+      - odoo-db
+    ports:
+      - "8069:8069"
+    environment:
+      - HOST=odoo-db
+      - USER=odoo
+      - PASSWORD=${ODOO_DB_PASS:-odoo}
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - odoo-addons:/mnt/extra-addons
+    networks:
+      - legal-net
+    profiles:
+      - with-odoo
+
+  odoo-db:
+    image: postgres:16-alpine
+    container_name: legal-th-postgres
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD=${ODOO_DB_PASS:-odoo}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - legal-net
+    profiles:
+      - with-odoo
+
+volumes:
+  odoo-data:
+  odoo-addons:
+  pg-data:
+
+networks:
+  legal-net:
+    driver: bridge

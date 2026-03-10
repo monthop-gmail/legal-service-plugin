@@ -1,0 +1,22 @@
+{
+  "name": "legal-th-mcp",
+  "version": "0.1.0",
+  "description": "Thai Legal Assistant MCP Plugin for Claude Marketplace",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["mcp", "legal", "thailand", "claude-marketplace"],
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
+  }
+}

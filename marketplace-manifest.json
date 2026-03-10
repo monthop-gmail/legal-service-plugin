@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "id": "legal-th",
+  "name": "Legal Thailand - ทนายความ AI",
+  "version": "0.1.0",
+  "description": "ปรึกษากฎหมายไทยเบื้องต้น ค้นหามาตรา คำนวณค่าชดเชย ประเมินค่าบริการ และนัดหมายทนายความ",
+  "author": {
+    "name": "Legal-TH Team",
+    "url": "https://legal-th.example.com"
+  },
+  "categories": ["legal", "thailand", "professional-services"],
+  "languages": ["th", "en"],
+  "icon": "⚖️",
+  "pricing": {
+    "model": "freemium",
+    "free_tools": ["legal_search", "fee_estimate"],
+    "paid_tools": ["case_intake"],
+    "plans": [
+      { "name": "free", "price": 0, "tools": ["legal_search", "fee_estimate"] },
+      { "name": "pro", "price": 299, "currency": "THB", "period": "month", "tools": ["*"] }
+    ]
+  },
+  "mcp": {
+    "transport": ["stdio", "sse"],
+    "tools": [
+      {
+        "name": "legal_search",
+        "description": "ค้นหากฎหมายไทย + คำนวณค่าชดเชย",
+        "example_prompts": [
+          "ถูกเลิกจ้างไม่เป็นธรรม ทำงานมา 5 ปี",
+          "สิทธิลาป่วยตามกฎหมาย",
+          "ค่า OT คิดยังไง"
+        ]
+      },
+      {
+        "name": "fee_estimate",
+        "description": "ประเมินค่าบริการทนายความ",
+        "example_prompts": [
+          "ค่าปรึกษาทนายคดีแรงงานเท่าไหร่",
+          "ค่าฟ้องคดีอาญา"
+        ]
+      },
+      {
+        "name": "case_intake",
+        "description": "นัดหมาย / ส่งเรื่องให้ทนาย",
+        "example_prompts": [
+          "อยากนัดพบทนาย",
+          "ส่งเรื่องให้ทนายช่วย"
+        ]
+      }
+    ]
+  },
+  "docker": {
+    "compose_file": "docker-compose.yml",
+    "services": {
+      "core": ["legal-mcp", "legal-mcp-http"],
+      "optional": ["odoo", "odoo-db"]
+    }
+  }
+}
