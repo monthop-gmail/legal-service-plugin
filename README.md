@@ -23,6 +23,41 @@ Claude ตอบกลับ:
   + นัดพบทนาย / ดูค่าบริการ
 ```
 
+## Skill Commands (Slash Commands)
+
+| Command | Auto? | คำอธิบาย |
+|---------|-------|---------|
+| `/legal-consult` | ✅ | ปรึกษากฎหมายเบื้องต้น — วิเคราะห์ปัญหา ค้นหามาตรา แนะนำทางเลือก |
+| `/legal-calculate` | ✅ | คำนวณค่าชดเชย สินจ้าง ค่าล่วงเวลา สิทธิประโยชน์แรงงาน |
+| `/legal-compare` | ✅ | เปรียบเทียบทางเลือก (เจรจา vs ร้องเรียน vs ฟ้องศาล) |
+| `/legal-intake` | ❌ | นัดหมายทนาย / ส่งเรื่องเข้า CRM (ต้องเรียกเอง) |
+| `/legal-draft` | ❌ | ร่างหนังสือทวงถาม ร้องเรียน บันทึกข้อตกลง |
+| `/legal-status` | ❌ | ดูสถานะเรื่อง / Lead (admin) |
+
+> **Auto?** = Claude เรียกใช้เองอัตโนมัติเมื่อเห็นว่าเกี่ยวข้อง / ❌ = ต้องพิมพ์ `/command` เอง
+
+### ตัวอย่างการใช้
+
+```bash
+# ปรึกษาเบื้องต้น (Claude จะเรียก legal_search + fee_estimate ให้)
+/legal-consult ถูกเลิกจ้างไม่เป็นธรรม ทำงานมา 5 ปี เงินเดือน 25,000
+
+# คำนวณสิทธิ์ค่าชดเชย
+/legal-calculate อายุงาน 5 ปี เงินเดือน 25,000
+
+# เปรียบเทียบทางเลือก
+/legal-compare ถูกเลิกจ้าง ควรเจรจาหรือฟ้องศาลดี
+
+# ร่างหนังสือทวงถาม
+/legal-draft ทวงถาม ค่าชดเชย 150,000 บาท จากบริษัท ABC
+
+# ส่งเรื่องให้ทนาย
+/legal-intake สมชาย ใจดี แรงงาน ถูกเลิกจ้างไม่มีเหตุผล
+
+# ดูสถานะเรื่อง
+/legal-status
+```
+
 ## MCP Tools
 
 | Tool | คำอธิบาย |
@@ -31,6 +66,26 @@ Claude ตอบกลับ:
 | `fee_estimate` | ประเมินค่าบริการทนาย (labor / contract / criminal) |
 | `case_intake` | สร้าง Lead → Odoo CRM |
 | `list_leads` | ดู Lead ทั้งหมด (admin) |
+
+### Skills + MCP Flow
+
+```
+ผู้ใช้: /legal-consult ถูกเลิกจ้าง ทำงาน 5 ปี
+        │
+        ▼
+┌─ Skill: legal-consult ────────────────┐
+│  1. วิเคราะห์ → ประเภท: แรงงาน        │
+│  2. MCP: legal_search(เลิกจ้าง, 5ปี)  │
+│  3. MCP: fee_estimate(labor, consult)  │
+│  4. ตอบกลับ: มาตรา + ค่าชดเชย + ราคา  │
+└───────────────────────────────────────┘
+        │
+        ▼
+ผู้ใช้: อยากส่งเรื่องให้ทนาย
+        │
+        ▼
+/legal-intake → MCP: case_intake → Lead ใน Odoo
+```
 
 ## Quick Start
 
@@ -99,26 +154,37 @@ curl http://localhost:3001/health
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────┐
-│  Claude Code / Claude Desktop                │
-│  ผู้ใช้: "ถูกเลิกจ้างไม่เป็นธรรม"              │
-└──────────┬───────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Claude Code / Claude Desktop                    │
+│  ผู้ใช้: /legal-consult ถูกเลิกจ้าง 5 ปี           │
+└──────────┬───────────────────────────────────────┘
+           │
+┌──────────▼───────────────────────────────────────┐
+│  Skills Layer (.claude/skills/)                  │
+│  ├─ /legal-consult   → ปรึกษากฎหมาย (auto)       │
+│  ├─ /legal-calculate → คำนวณค่าชดเชย (auto)      │
+│  ├─ /legal-compare   → เปรียบเทียบทางเลือก (auto) │
+│  ├─ /legal-intake    → นัดหมายทนาย (manual)      │
+│  ├─ /legal-draft     → ร่างหนังสือ (manual)       │
+│  └─ /legal-status    → ดูสถานะ (manual)          │
+└──────────┬───────────────────────────────────────┘
            │ MCP (Streamable HTTP / stdio / SSE)
-┌──────────▼───────────────────────────────────┐
-│  legal-th-mcp          :3001                 │
-│  ├─ /mcp     → Streamable HTTP (primary)     │
-│  ├─ /sse     → SSE fallback (legacy)         │
-│  ├─ /health  → Health check                  │
-│  ├─ legal_search   → ฐานข้อมูลกฎหมาย         │
-│  ├─ fee_estimate   → ตารางค่าบริการ           │
-│  ├─ case_intake    → Odoo CRM               │
-│  └─ list_leads     → Odoo CRM               │
-└──────────┬───────────────────────────────────┘
+┌──────────▼───────────────────────────────────────┐
+│  legal-th-mcp          :3001                     │
+│  ├─ /mcp     → Streamable HTTP (primary)         │
+│  ├─ /sse     → SSE fallback (legacy)             │
+│  ├─ /health  → Health check                      │
+│  │                                               │
+│  ├─ legal_search   → ฐานข้อมูลกฎหมาย             │
+│  ├─ fee_estimate   → ตารางค่าบริการ               │
+│  ├─ case_intake    → Odoo CRM                    │
+│  └─ list_leads     → Odoo CRM                   │
+└──────────┬───────────────────────────────────────┘
            │ (optional)
-┌──────────▼───────────────────────────────────┐
-│  Odoo 17          :8069                      │
-│  └─ PostgreSQL    (internal)                 │
-└──────────────────────────────────────────────┘
+┌──────────▼───────────────────────────────────────┐
+│  Odoo 17          :8069                          │
+│  └─ PostgreSQL    (internal)                     │
+└──────────────────────────────────────────────────┘
 ```
 
 ## Docker Services
@@ -150,10 +216,11 @@ npm run dev        # watch mode
 
 ## Roadmap
 
+- [x] Streamable HTTP transport (MCP 2025-03-26)
+- [x] Skill commands (6 slash commands)
 - [ ] เพิ่มกฎหมายแพ่ง / อาญา / ที่ดิน / ครอบครัว
 - [ ] เชื่อมต่อ Odoo CRM จริง (XML-RPC)
 - [ ] RAG search จากฐานข้อมูลคำพิพากษา
-- [x] Streamable HTTP transport (MCP 2025-03-26)
 - [ ] Marketplace pricing & billing integration
 
 ## License

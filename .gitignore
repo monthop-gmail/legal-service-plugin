@@ -1,4 +1,7 @@
 node_modules/
 dist/
-.claude/
 *.env
+
+# Claude Code local settings (ignore) but keep skills (track)
+.claude/settings.local.json
+!.claude/skills/
